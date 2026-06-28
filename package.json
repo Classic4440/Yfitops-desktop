@@ -1,0 +1,40 @@
+{
+  "name": "spotcheck-lab",
+  "version": "1.0.0",
+  "description": "Multi-profile browser testing desktop app for QA: isolated profiles, per-profile proxies, and official Chromium device emulation.",
+  "author": "SpotCheck Lab",
+  "license": "MIT",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n VITE,ELECTRON -c green,blue \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build:renderer": "vite build",
+    "build": "npm run build:renderer && electron-builder",
+    "build:dir": "npm run build:renderer && electron-builder --dir",
+    "electron": "electron .",
+    "start": "npm run build:renderer && electron .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "electron-log": "^5.2.0",
+    "electron-store": "^8.2.0",
+    "https-proxy-agent": "^7.0.5",
+    "socks-proxy-agent": "^8.0.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.35.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.8",
+    "wait-on": "^8.0.1"
+  }
+}
