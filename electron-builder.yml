@@ -1,0 +1,36 @@
+appId: com.spotcheck.lab
+productName: SpotCheck Lab
+copyright: Copyright © SpotCheck Lab
+
+directories:
+  output: build
+  buildResources: src/assets
+
+# Only ship what the packaged app needs at runtime. Renderer source lives under
+# src/renderer but is served from the built dist/renderer bundle in production.
+files:
+  - src/main/**/*
+  - src/preload/**/*
+  - dist/renderer/**/*
+  - package.json
+
+# electron-builder prunes devDependencies automatically; production deps
+# (axios, electron-store, electron-log, proxy agents) are bundled.
+asarUnpack:
+  - "**/node_modules/socks-proxy-agent/**"
+  - "**/node_modules/https-proxy-agent/**"
+
+win:
+  target:
+    - nsis
+  # Provide src/assets/icon.ico to brand the build; electron-builder falls back
+  # to the default Electron icon if it is absent.
+  icon: src/assets/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SpotCheck Lab
