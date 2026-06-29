@@ -83,9 +83,19 @@ function registerIpc() {
   });
   ipcMain.handle('profiles:duplicate', (_e, id) => profileManager.duplicateProfile(id));
   ipcMain.handle('profiles:generateSeed', () => profileManager.generateSeed());
-  ipcMain.handle('profiles:emulation', (_e, id) => {
-    const profile = profileManager.getProfile(id);
-    if (!profile) throw new Error('Profile not found');
+  // Accepts either a stored profile id (string) or a profile-like object. The
+  // wizard passes an unsaved object (seed + overrides) to render a live preview
+  // before the profile exists.
+  ipcMain.handle('profiles:emulation', (_e, idOrProfile) => {
+    let profile;
+    if (typeof idOrProfile === 'string') {
+      profile = profileManager.getProfile(idOrProfile);
+      if (!profile) throw new Error('Profile not found');
+    } else if (idOrProfile && typeof idOrProfile === 'object') {
+      profile = idOrProfile;
+    } else {
+      throw new Error('A profile id or profile object is required');
+    }
     return computeEmulation(profile);
   });
 

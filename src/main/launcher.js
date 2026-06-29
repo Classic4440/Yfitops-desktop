@@ -170,10 +170,14 @@ async function launchProfileWindow(profile, proxy, ctx) {
   attachLogging(win.webContents, logger);
   logger.info(`Launching profile "${profile.name}" (${profile.id})`);
 
+  // Set when a launch failure tears down the window, so the synchronous
+  // 'closed' handler does not overwrite the 'error' status with 'stopped'.
+  let launchFailed = false;
+
   win.on('closed', () => {
     runningWindows.delete(profile.id);
     logger.info(`Profile "${profile.name}" window closed`);
-    if (ctx.onStatus) ctx.onStatus(profile.id, 'stopped');
+    if (!launchFailed && ctx.onStatus) ctx.onStatus(profile.id, 'stopped');
   });
 
   try {
@@ -187,9 +191,10 @@ async function launchProfileWindow(profile, proxy, ctx) {
     return { profileId: profile.id };
   } catch (err) {
     logger.error(`Launch failed: ${err.message}`);
-    if (ctx.onStatus) ctx.onStatus(profile.id, 'error');
+    launchFailed = true;
     if (!win.isDestroyed()) win.destroy();
     runningWindows.delete(profile.id);
+    if (ctx.onStatus) ctx.onStatus(profile.id, 'error');
     throw err;
   }
 }
