@@ -11,7 +11,7 @@ export default function Sidebar({ view, setView }) {
     <aside className="sidebar">
       <div className="brand">
         <span className="dot" />
-        Yfitops
+        SocketObit
       </div>
       {NAV.map((item) => (
         <button

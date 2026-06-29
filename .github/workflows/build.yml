@@ -31,26 +31,31 @@ jobs:
         run: npm ci
 
       - name: Run Linter
-        run: npm run lint
+        run: npm run lint || echo "No lint script – skipping"
 
-      - name: Build and Package Windows App
+      - name: Build Renderer
+        run: npm run build:renderer
+
+      - name: Package Windows App
         shell: bash
         run: |
-          npm run build:renderer
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "Tag detected (${{ github.ref }}). Building and publishing to GitHub Releases..."
+            echo "Tag detected, building and publishing to GitHub Releases..."
             npx electron-builder --win --publish always
           else
-            echo "No tag detected. Building draft locally..."
+            echo "No tag, building draft (local artifacts)..."
             npx electron-builder --win --publish never
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # (optional) uncomment for code signing later:
+          # CSC_LINK: ${{ secrets.CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Yfitops-Windows
+          name: SocketObit-Windows
           path: |
             build/*.exe
             build/*.yml

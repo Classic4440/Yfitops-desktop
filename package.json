@@ -1,8 +1,9 @@
 {
-  "name": "yfitops-desktop",
-  "version": "1.0.0",
+  "name": "socketobit",
+  "productName": "SocketObit",
+  "version": "0.1.0",
   "description": "Multi-profile browser testing desktop app with real device fingerprinting and SOCKS5 auth support.",
-  "author": "Yfitops",
+  "author": "SocketObit",
   "license": "MIT",
   "main": "src/main/main.js",
   "scripts": {

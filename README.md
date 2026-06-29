@@ -1,4 +1,4 @@
-# Yfitops
+# SocketObit
 
 A multi-profile browser testing desktop app (Electron) for **QA, regional content
 checks, and client-environment testing**. Launch multiple **isolated** browser
@@ -38,7 +38,7 @@ https-proxy-agent · socks-proxy-agent · socks · get-port · electron-builder.
 ## Project layout
 
 ```
-yfitops/
+socketobit/
 ├── src/
 │   ├── main/                  # Electron main process (Node)
 │   │   ├── main.js            # Entry point + IPC handlers
@@ -79,7 +79,7 @@ npm run dev
 npm run build
 ```
 
-The installer is written to `build/` (e.g. `build/Yfitops Setup <version>.exe`).
+The installer is written to `build/` (e.g. `build/SocketObit Setup <version>.exe`).
 
 ---
 
@@ -87,7 +87,7 @@ The installer is written to `build/` (e.g. `build/Yfitops Setup <version>.exe`).
 
 - The renderer runs with `contextIsolation: true` and `nodeIntegration: false`.
 - `electron-store` encryption obfuscates the on-disk JSON but the key ships with
-  the app. For real deployments, set a custom key via the `YFITOPS_STORE_KEY`
+  the app. For real deployments, set a custom key via the `SOCKETOBIT_STORE_KEY`
   environment variable before first run.
 - Proxy passwords are stored in the encrypted store and never logged.
 

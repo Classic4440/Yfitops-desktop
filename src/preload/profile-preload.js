@@ -135,4 +135,4 @@ AudioContext.prototype.createOscillator = function() {
   return osc;
 };
 
-console.log('[SpotCheck] Stealth engine active for profile');
+console.log('[SocketObit] Stealth engine active for profile');

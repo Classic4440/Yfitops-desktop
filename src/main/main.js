@@ -25,7 +25,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 600,
     backgroundColor: '#0f1117',
-    title: 'Yfitops Dashboard',
+    title: 'SocketObit Dashboard',
     webPreferences: {
       preload: DASHBOARD_PRELOAD,
       contextIsolation: true,

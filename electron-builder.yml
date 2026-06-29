@@ -1,6 +1,6 @@
-appId: com.yfitops.desktop
-productName: Yfitops
-copyright: Copyright © Yfitops
+appId: com.socketobit.app
+productName: SocketObit
+copyright: Copyright © SocketObit
 
 directories:
   output: build
@@ -33,4 +33,4 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Yfitops
+  shortcutName: SocketObit

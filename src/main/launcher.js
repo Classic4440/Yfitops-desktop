@@ -149,7 +149,7 @@ const { startSocksForwarder } = require('./socksForwarder');
   const win = new BrowserWindow({
     width: Math.min(fp.screenWidth, 1600),
     height: Math.min(fp.screenHeight, 1000),
-    title: `Yfitops — ${profile.name} (${fp.deviceName})`,
+    title: `SocketObit — ${profile.name} (${fp.deviceName})`,
 
     webPreferences: {
       partition: partitionName(profile.id),
