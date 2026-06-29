@@ -14,12 +14,65 @@ const { generateFingerprint } = require('./fingerprintGenerator');
 const { settingsStore } = require('./store');
 const { appLog } = require('./logger');
 
-
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const PROFILE_PRELOAD = path.join(__dirname, '../preload/profile-preload.js');
 const DASHBOARD_PRELOAD = path.join(__dirname, '../preload/dashboard-preload.js');
 
 let mainWindow = null;
+
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 960,
+    minHeight: 600,
+    backgroundColor: '#0f1117',
+    title: 'SocketObit Dashboard',
+    webPreferences: {
+      preload: DASHBOARD_PRELOAD,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (isDev) {
+    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../../dist/renderer/index.html'));
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+// Build the shared launch context passed into the launcher.
+function launchContext() {
+  return {
+    userDataPath: app.getPath('userData'),
+    defaultStartUrl: settingsStore.get('defaultStartUrl'),
+    preloadPath: PROFILE_PRELOAD,
+    onStatus: (profileId, status) => {
+      try {
+        profileManager.setStatus(profileId, status);
+      } catch (err) {
+        appLog.warn(`setStatus failed: ${err.message}`);
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('profile-status-changed', { profileId, status });
+      }
+    },
+  };
+}
+
+// Annotate stored profiles with their current live running state for the UI.
+function profilesWithRuntime() {
+  return profileManager.listProfiles().map((p) => ({
+    ...p,
+    status: launcher.isRunning(p.id) ? 'running' : p.status === 'running' ? 'stopped' : p.status,
+  }));
+}
 
 // Helper to load fresh devices
 function loadDevices() {

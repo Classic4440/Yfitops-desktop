@@ -10,8 +10,6 @@ const osList = [
   'Mac OS X 11_0_0', // Big Sur
   'Mac OS X 12_0_0', // Monterey
 ];
-
-const platforms = ['Win32', 'Win32', 'MacIntel', 'MacIntel', 'MacIntel'];
 const uaWindows = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const uaMac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
