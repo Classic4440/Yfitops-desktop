@@ -22,12 +22,25 @@ const fs = require('fs');
 const { BrowserWindow, session } = require('electron');
 const { computeEmulation } = require('./emulation');
 const { getProfileLogger } = require('./logger');
+const { generateFingerprint } = require('./fingerprintGenerator');
+const axios = require('axios');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
 // profileId -> BrowserWindow
 const runningWindows = new Map();
 
 function partitionName(profileId) {
   return `persist:profile-${profileId}`;
+}
+
+function buildProxyUrl(proxy) {
+  const auth =
+    proxy.username != null
+      ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password || '')}@`
+      : '';
+  const scheme = proxy.type === 'socks5' ? 'socks5' : proxy.type;
+  return `${scheme}://${auth}${proxy.host}:${proxy.port}`;
 }
 
 function isRunning(profileId) {
@@ -78,17 +91,17 @@ async function applyProxy(ses, win, proxy, logger) {
 /**
  * Apply official Chromium device emulation to a window's webContents.
  * @param {Electron.WebContents} wc
- * @param {object} emu - output of computeEmulation()
+ * @param {object} fp - output of generateFingerprint()
  * @param {object} logger
  */
-async function applyEmulation(wc, emu, logger) {
+async function applyEmulation(wc, fp, logger) {
   // Screen + viewport metrics. screenPosition 'desktop' emulates a desktop
   // device; viewSize controls window.innerWidth/Height, screenSize controls
   // window.screen.width/height.
   wc.enableDeviceEmulation({
     screenPosition: 'desktop',
-    screenSize: { width: emu.screen.width, height: emu.screen.height },
-    viewSize: { width: emu.screen.width, height: emu.screen.height },
+    screenSize: { width: fp.screenWidth, height: fp.screenHeight },
+    viewSize: { width: fp.screenWidth, height: fp.screenHeight },
     viewPosition: { x: 0, y: 0 },
     deviceScaleFactor: 0,
     scale: 1,
@@ -98,12 +111,12 @@ async function applyEmulation(wc, emu, logger) {
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
     await wc.debugger.sendCommand('Emulation.setTimezoneOverride', {
-      timezoneId: emu.timezone,
+      timezoneId: fp.timezone,
     });
     await wc.debugger.sendCommand('Emulation.setLocaleOverride', {
-      locale: emu.language,
+      locale: fp.language,
     });
-    logger.info(`Emulation: tz=${emu.timezone} locale=${emu.language}`);
+    logger.info(`Emulation: tz=${fp.timezone} locale=${fp.language}`);
   } catch (err) {
     logger.warn(`CDP emulation override failed: ${err.message}`);
   }
@@ -145,24 +158,42 @@ async function launchProfileWindow(profile, proxy, ctx) {
   }
 
   const logger = getProfileLogger(profile.id, ctx.userDataPath);
-  const emu = computeEmulation(profile);
 
+  // Fetch proxy geo for timezone sync
+  let geo = null;
+  if (proxy) {
+    try {
+      const url = buildProxyUrl(proxy);
+      const agent = proxy.type === 'socks5' ? new SocksProxyAgent(url) : new HttpsProxyAgent(url);
+      const resp = await axios.get('http://ip-api.com/json', {
+        httpAgent: agent,
+        httpsAgent: agent,
+        proxy: false,
+        timeout: 5000,
+      });
+      geo = resp.data;
+    } catch (e) {
+      logger.warn(`Proxy geo fetch failed: ${e.message}. Using seed-only timezone.`);
+    }
+  }
+
+  const fp = generateFingerprint(profile.seed, geo);
   const ses = session.fromPartition(partitionName(profile.id));
   // setUserAgent applies the UA and the Accept-Language header / navigator.languages.
-  ses.setUserAgent(emu.userAgent, emu.languages.join(','));
+  ses.setUserAgent(fp.userAgent, fp.languages.join(','));
 
   const win = new BrowserWindow({
-    width: Math.min(emu.screen.width, 1600),
-    height: Math.min(emu.screen.height, 1000),
+    width: Math.min(fp.screenWidth, 1600),
+    height: Math.min(fp.screenHeight, 1000),
     title: `SpotCheck — ${profile.name}`,
     webPreferences: {
       partition: partitionName(profile.id),
       preload: ctx.preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // preload needs ipcRenderer (no Node APIs are exposed to pages)
-      // The profile id lets the preload request its emulation values.
-      additionalArguments: [`--profile-id=${profile.id}`],
+      sandbox: false,
+      // Pass fingerprint to preload via additionalArguments
+      additionalArguments: [`--profile-id=${profile.id}`, `--fp=${JSON.stringify(fp)}`],
     },
   });
 
@@ -178,9 +209,9 @@ async function launchProfileWindow(profile, proxy, ctx) {
 
   try {
     await applyProxy(ses, win, proxy, logger);
-    await applyEmulation(win.webContents, emu, logger);
+    await applyEmulation(win.webContents, fp, logger);
 
-    const startUrl = emu.startUrl || ctx.defaultStartUrl || 'about:blank';
+    const startUrl = profile.startUrl || ctx.defaultStartUrl || 'about:blank';
     await win.loadURL(startUrl);
     logger.info(`Loaded start URL: ${startUrl}`);
     if (ctx.onStatus) ctx.onStatus(profile.id, 'running');
