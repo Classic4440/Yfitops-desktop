@@ -28,9 +28,9 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Run Linter
+      - name: Run Linter (if defined)
         run: npm run lint || echo "No lint script – skipping"
 
       - name: Build Renderer
