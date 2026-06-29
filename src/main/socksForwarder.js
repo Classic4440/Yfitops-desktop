@@ -6,6 +6,7 @@
  */
 
 const { spawn } = require('child_process');
+const getPort = require('get-port');
 
 async function startSocksForwarder(proxyConfig) {
   const { host, port, username, password } = proxyConfig;
