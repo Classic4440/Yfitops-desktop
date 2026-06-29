@@ -8,6 +8,7 @@ const emptyForm = {
   name: '',
   proxyId: '',
   seed: '',
+  deviceId: '',
   resolution: '',
   language: '',
   timezone: '',
@@ -15,38 +16,37 @@ const emptyForm = {
   startUrl: '',
 };
 
-// Quick-create wizard (Name -> Proxy -> Seed/identity -> Review/Launch).
-// In edit mode it collapses into a single review form.
+// Quick-create wizard (Name -> Proxy -> Device -> Review/Launch).
 export default function ProfileWizard({ proxies, editing, notify, onClose, onSaved }) {
   const isEdit = Boolean(editing);
   const [step, setStep] = useState(isEdit ? 3 : 0);
   const [form, setForm] = useState(emptyForm);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [devices, setDevices] = useState([]);
+
+  useEffect(() => {
+    api.invoke('profiles:getDevices').then(setDevices);
+  }, []);
 
   useEffect(() => {
     if (isEdit) {
-      setForm({ ...emptyForm, ...editing, proxyId: editing.proxyId || '' });
+      setForm({ ...emptyForm, ...editing, proxyId: editing.proxyId || '', deviceId: editing.deviceId || '' });
     } else {
-      // Pre-generate a seed for new profiles.
       api.profiles.generateSeed().then((seed) => setForm((f) => ({ ...f, seed })));
     }
   }, [isEdit, editing]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const regenSeed = async () => {
-    const seed = await api.profiles.generateSeed();
-    setForm((f) => ({ ...f, seed }));
-  };
-
-  // Live emulation preview is computed by the main process from the current seed.
+  // Live emulation preview is computed by the main process from the current seed/device.
   useEffect(() => {
     let active = true;
     if (!form.seed) return;
     api.profiles
       .emulation({
         seed: form.seed,
+        deviceId: form.deviceId,
         resolution: form.resolution,
         language: form.language,
         timezone: form.timezone,
@@ -59,10 +59,11 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
     return () => {
       active = false;
     };
-  }, [form.seed, form.resolution, form.language, form.timezone, form.userAgent]);
+  }, [form.seed, form.deviceId, form.resolution, form.language, form.timezone, form.userAgent]);
 
   const canNext = () => {
     if (step === 0) return form.name.trim().length > 0;
+    if (step === 2) return form.deviceId !== '';
     return true;
   };
 
@@ -73,6 +74,7 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
         name: form.name,
         proxyId: form.proxyId || null,
         seed: form.seed,
+        deviceId: form.deviceId || undefined,
         resolution: form.resolution || undefined,
         language: form.language || undefined,
         timezone: form.timezone || undefined,
@@ -155,18 +157,20 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
           </div>
         )}
 
-        {/* Step 2: Identity (seed) */}
+        {/* Step 2: Device Selection */}
         {(!isEdit ? step === 2 : false) && (
           <div className="field">
-            <label>Seed (deterministic identity)</label>
-            <div className="row">
-              <input value={form.seed} onChange={set('seed')} className="mono" />
-              <button className="btn" type="button" onClick={regenSeed} style={{ flex: '0 0 auto' }}>
-                ↻ Regenerate
-              </button>
-            </div>
+            <label>Select Real Device Profile</label>
+            <select value={form.deviceId} onChange={set('deviceId')}>
+              <option value="" disabled>Choose a device...</option>
+              {devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
             <p className="muted" style={{ marginTop: 8 }}>
-              The same seed always produces the same emulation values.
+              Each device profile contains real-world hardware specs and browser signatures.
             </p>
           </div>
         )}
@@ -180,6 +184,16 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
                 <input value={form.name} onChange={set('name')} />
               </div>
             )}
+            <div className="field">
+              <label>Real Device Profile</label>
+              <select value={form.deviceId} onChange={set('deviceId')}>
+                {devices.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             {isEdit && (
               <div className="field">
                 <label>Assigned proxy</label>

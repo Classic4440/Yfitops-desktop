@@ -40,6 +40,7 @@ function createProfile(data = {}) {
     name: data.name && String(data.name).trim() ? String(data.name).trim() : `Profile ${profiles.length + 1}`,
     proxyId: data.proxyId || null,
     seed: data.seed && String(data.seed).trim() ? String(data.seed).trim() : generateSeed(),
+    deviceId: data.deviceId || undefined,
     resolution: data.resolution || undefined,
     language: data.language || undefined,
     timezone: data.timezone || undefined,

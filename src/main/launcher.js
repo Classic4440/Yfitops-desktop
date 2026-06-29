@@ -171,7 +171,7 @@ async function launchProfileWindow(profile, proxy, ctx) {
     }
   }
 
-  const fp = generateFingerprint(profile.seed, geo);
+  const fp = generateFingerprint(profile.seed, geo, profile.deviceId);
   const ses = session.fromPartition(partitionName(profile.id));
   ses.setUserAgent(fp.userAgent);
 
@@ -179,6 +179,7 @@ async function launchProfileWindow(profile, proxy, ctx) {
     width: Math.min(fp.screenWidth, 1600),
     height: Math.min(fp.screenHeight, 1000),
     title: `Yfitops — ${profile.name} (${fp.deviceName})`,
+
     webPreferences: {
       partition: partitionName(profile.id),
       preload: ctx.preloadPath,

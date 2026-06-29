@@ -25,7 +25,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 600,
     backgroundColor: '#0f1117',
-    title: 'SpotCheck Lab',
+    title: 'Yfitops Dashboard',
     webPreferences: {
       preload: DASHBOARD_PRELOAD,
       contextIsolation: true,
@@ -74,6 +74,7 @@ function profilesWithRuntime() {
 
 function registerIpc() {
   // --- Profiles ---
+  ipcMain.handle('profiles:getDevices', () => require('./fingerprintGenerator').deviceProfiles);
   ipcMain.handle('profiles:list', () => profilesWithRuntime());
   ipcMain.handle('profiles:create', (_e, data) => profileManager.createProfile(data));
   ipcMain.handle('profiles:update', (_e, id, patch) => profileManager.updateProfile(id, patch));
@@ -83,10 +84,8 @@ function registerIpc() {
   });
   ipcMain.handle('profiles:duplicate', (_e, id) => profileManager.duplicateProfile(id));
   ipcMain.handle('profiles:generateSeed', () => profileManager.generateSeed());
-  ipcMain.handle('profiles:emulation', (_e, id) => {
-    const profile = profileManager.getProfile(id);
-    if (!profile) throw new Error('Profile not found');
-    return computeEmulation(profile);
+  ipcMain.handle('profiles:emulation', (_e, data) => {
+    return generateFingerprint(data.seed, null, data.deviceId);
   });
 
   // --- Proxies ---
@@ -139,11 +138,9 @@ function registerIpc() {
     launcher.clearProfileStorage(profileId, app.getPath('userData'))
   );
 
-  // --- Synchronous channel used by the profile preload to fetch its own
-  //     emulation values (hardwareConcurrency / deviceMemory) before page load.
   ipcMain.on('emulation:getSync', (event, profileId) => {
     const profile = profileManager.getProfile(profileId);
-    event.returnValue = profile ? computeEmulation(profile) : null;
+    event.returnValue = profile ? generateFingerprint(profile.seed, null, profile.deviceId) : null;
   });
 }
 
