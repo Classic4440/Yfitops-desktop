@@ -21,10 +21,10 @@
   "dependencies": {
     "axios": "^1.7.7",
     "electron-log": "^5.2.0",
-    "electron-store": "^8.2.0",
-    "get-port": "^7.1.0",
-    "https-proxy-agent": "^7.0.5",
-    "socks-proxy-agent": "^8.0.4",
+    "electron-store": "^6.1.1",
+    "get-port": "^5.1.1",
+    "https-proxy-agent": "^5.0.1",
+    "socks-proxy-agent": "^6.2.1",
     "socks": "^2.8.3"
   },
   "devDependencies": {
