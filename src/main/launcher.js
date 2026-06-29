@@ -222,7 +222,7 @@ async function clearProfileStorage(profileId, userDataPath) {
   try {
     fs.rmSync(partitionDir, { recursive: true, force: true });
   } catch (err) {
-    logger.warn(`Failed to remove partition folder: ${err.message}`);
+    console.warn(`Failed to remove partition folder: ${err.message}`);
   }
   return true;
 }
