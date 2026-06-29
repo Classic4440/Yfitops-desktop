@@ -25,6 +25,51 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
   const [saving, setSaving] = useState(false);
   const [devices, setDevices] = useState([]);
 
+  const refreshDevices = async () => {
+    const list = await api.invoke('profiles:getDevices');
+    setDevices(list);
+  };
+
+  const handleRandomDevice = async () => {
+    const device = await api.invoke('random-device');
+    setForm((f) => ({ ...f, deviceId: device.id }));
+  };
+
+  const handleImportDevices = async () => {
+    // In Electron, we need to show open dialog, but for now, 
+    // assuming we get the path or implementing a simple input file picker
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      const result = await api.invoke('import-devices', file.path);
+      if (result.success) {
+        notify(`Imported ${result.count} devices`, 'success');
+        refreshDevices();
+      }
+    };
+    input.click();
+  };
+
+  const handleExportDevices = async () => {
+    const path = await api.invoke('export-devices');
+    notify(`Exported to ${path}`, 'success');
+  };
+
+  const handleFetchOnline = async () => {
+    setSaving(true);
+    try {
+      const result = await api.invoke('fetch-online-devices');
+      notify(`Fetched ${result.count} devices online`, 'success');
+      refreshDevices();
+    } catch (err) {
+      notify('Failed to fetch devices', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     api.invoke('profiles:getDevices').then((list) => {
       setDevices(list);
@@ -167,13 +212,18 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
           <div className="field">
             <label>Select Real Device Profile</label>
             <select value={form.deviceId} onChange={set('deviceId')}>
-              <option value="" disabled>Choose a device...</option>
               {devices.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </select>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="btn" type="button" onClick={handleRandomDevice}>Random</button>
+              <button className="btn" type="button" onClick={handleImportDevices}>Import</button>
+              <button className="btn" type="button" onClick={handleExportDevices}>Export</button>
+              <button className="btn" type="button" onClick={handleFetchOnline}>Fetch Online</button>
+            </div>
             <p className="muted" style={{ marginTop: 8 }}>
               Each device profile contains real-world hardware specs and browser signatures.
             </p>
