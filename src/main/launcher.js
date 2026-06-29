@@ -140,6 +140,8 @@ async function launchProfileWindow(profile, proxy, ctx) {
   }
 
   const fp = generateFingerprint(profile.seed, geo, profile.deviceId);
+  logger.info(`Fingerprint generated: device="${fp.deviceName}" res=${fp.screenWidth}x${fp.screenHeight} tz=${fp.timezone} lang=${fp.language}`);
+  
   const ses = session.fromPartition(partitionName(profile.id));
   ses.setUserAgent(fp.userAgent);
 

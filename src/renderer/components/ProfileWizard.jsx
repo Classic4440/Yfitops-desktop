@@ -26,8 +26,13 @@ export default function ProfileWizard({ proxies, editing, notify, onClose, onSav
   const [devices, setDevices] = useState([]);
 
   useEffect(() => {
-    api.invoke('profiles:getDevices').then(setDevices);
-  }, []);
+    api.invoke('profiles:getDevices').then((list) => {
+      setDevices(list);
+      if (!isEdit && list.length > 0) {
+        setForm((f) => ({ ...f, deviceId: list[0].id }));
+      }
+    });
+  }, [isEdit]);
 
   useEffect(() => {
     if (isEdit) {

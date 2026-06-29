@@ -22,6 +22,7 @@ const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { proxiesStore, settingsStore } = require('./store');
+const { appLog } = require('./logger');
 
 const VALID_TYPES = ['http', 'https', 'socks5'];
 
@@ -124,6 +125,8 @@ async function testProxy(id) {
   const proxy = getProxy(id);
   if (!proxy) throw new Error(`Proxy ${id} not found`);
 
+  appLog.info(`Testing proxy: ${proxy.host}:${proxy.port} (type=${proxy.type})`);
+
   const url = buildProxyUrl(proxy);
   const agent =
     proxy.type === 'socks5' ? new SocksProxyAgent(url) : new HttpsProxyAgent(url);
@@ -146,8 +149,10 @@ async function testProxy(id) {
       city: data.city,
       at: Date.now(),
     };
+    appLog.info(`Proxy OK: ${proxy.host}:${proxy.port} -> exit IP: ${result.ip}`);
   } catch (err) {
     result = { ok: false, error: err.message, at: Date.now() };
+    appLog.warn(`Proxy failed: ${proxy.host}:${proxy.port} -> ${err.message}`);
   }
 
   // Persist the latest test outcome on the proxy record.
