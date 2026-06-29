@@ -8,7 +8,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const profileManager = require('./profileManager');
 const proxyManager = require('./proxyManager');
 const launcher = require('./launcher');
-const { computeEmulation } = require('./emulation');
+const { generateFingerprint } = require('./fingerprintGenerator');
 const { settingsStore } = require('./store');
 const { appLog } = require('./logger');
 

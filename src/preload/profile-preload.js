@@ -1,5 +1,3 @@
-const { contextBridge, ipcRenderer } = require('electron');
-
 const fpArg = process.argv.find(arg => arg.startsWith('--fp='));
 if (!fpArg) throw new Error('No fingerprint data');
 const fp = JSON.parse(fpArg.slice(5));
@@ -94,7 +92,7 @@ HTMLCanvasElement.prototype.toDataURL = function(type, quality) {
       tempCtx.putImageData(imageData, 0, 0);
       return tempCanvas.toDataURL(type, quality);
     }
-  } catch(e) {}
+  } catch(e) { return; }
   return origToDataURL.call(this, type, quality);
 };
 

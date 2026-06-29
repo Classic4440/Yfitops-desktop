@@ -6,9 +6,9 @@ const fs = require('fs');
 const { fork } = require('child_process');
 const net = require('net');
 const { BrowserWindow, session } = require('electron');
-const { computeEmulation } = require('./emulation');
 const { getProfileLogger } = require('./logger');
 const { generateFingerprint } = require('./fingerprintGenerator');
+const { startSocksForwarder } = require('./socksForwarder');
 const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
@@ -104,9 +104,9 @@ async function launchProfileWindow(profile, proxy, ctx) {
   if (isRunning(profile.id)) {
     throw new Error(`Profile "${profile.name}" is already running.`);
   }
-const { fork } = require('child_process');
-const { startSocksForwarder } = require('./socksForwarder');
-...
+
+  const logger = getProfileLogger(profile.id, ctx.userDataPath);
+
   // --- SOCKS5 Forwarder Integration ---
   let effectiveProxy = proxy;
   if (proxy && proxy.type === 'socks5' && proxy.username) {
@@ -123,7 +123,6 @@ const { startSocksForwarder } = require('./socksForwarder');
       password: ''
     };
   }
-
 
   let geo = null;
   if (proxy) {
@@ -150,7 +149,6 @@ const { startSocksForwarder } = require('./socksForwarder');
     width: Math.min(fp.screenWidth, 1600),
     height: Math.min(fp.screenHeight, 1000),
     title: `SocketObit — ${profile.name} (${fp.deviceName})`,
-
     webPreferences: {
       partition: partitionName(profile.id),
       preload: ctx.preloadPath,
