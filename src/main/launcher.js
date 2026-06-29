@@ -3,8 +3,6 @@
 // Launches and tracks isolated profile browser windows.
 const path = require('path');
 const fs = require('fs');
-const { fork } = require('child_process');
-const net = require('net');
 const { BrowserWindow, session } = require('electron');
 const { getProfileLogger } = require('./logger');
 const { generateFingerprint } = require('./fingerprintGenerator');
@@ -223,7 +221,9 @@ async function clearProfileStorage(profileId, userDataPath) {
   const partitionDir = path.join(userDataPath, 'Partitions', `profile-${profileId}`);
   try {
     fs.rmSync(partitionDir, { recursive: true, force: true });
-  } catch {}
+  } catch (err) {
+    logger.warn(`Failed to remove partition folder: ${err.message}`);
+  }
   return true;
 }
 
