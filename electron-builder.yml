@@ -1,6 +1,6 @@
-appId: com.spotcheck.lab
-productName: SpotCheck Lab
-copyright: Copyright © SpotCheck Lab
+appId: com.yfitops.desktop
+productName: Yfitops
+copyright: Copyright © Yfitops
 
 directories:
   output: build
@@ -33,4 +33,4 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: SpotCheck Lab
+  shortcutName: Yfitops

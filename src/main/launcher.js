@@ -41,21 +41,6 @@ function listRunning() {
 }
 
 /**
- * Find a random free port on localhost.
- */
-function getFreePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on('error', reject);
-    server.listen(0, () => {
-      const { port } = server.address();
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-/**
  * Apply per-window proxy settings.
  */
 async function applyProxy(ses, win, proxy, logger) {
@@ -119,40 +104,26 @@ async function launchProfileWindow(profile, proxy, ctx) {
   if (isRunning(profile.id)) {
     throw new Error(`Profile "${profile.name}" is already running.`);
   }
-
-  const logger = getProfileLogger(profile.id, ctx.userDataPath);
-
+const { fork } = require('child_process');
+const { startSocksForwarder } = require('./socksForwarder');
+...
   // --- SOCKS5 Forwarder Integration ---
   let effectiveProxy = proxy;
   if (proxy && proxy.type === 'socks5' && proxy.username) {
-    const localPort = await getFreePort();
-    logger.info(`Spawning SOCKS5 forwarder for ${proxy.host}:${proxy.port} on local port ${localPort}`);
-    
-    const forwarder = fork(path.join(__dirname, 'socksForwarder.js'), [
-      JSON.stringify(proxy),
-      localPort.toString()
-    ], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
+    const { port, child } = await startSocksForwarder(proxy);
+    logger.info(`Spawning SOCKS5 forwarder for ${proxy.host}:${proxy.port} on local port ${port}`);
 
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('SOCKS5 forwarder timed out')), 10000);
-      forwarder.once('message', (msg) => {
-        if (msg === 'ready') {
-          clearTimeout(timeout);
-          resolve();
-        }
-      });
-      forwarder.once('error', reject);
-    });
-
-    runningForwarders.set(profile.id, forwarder);
+    runningForwarders.set(profile.id, child);
+    // Point the browser to the local forwarder (which doesn't require auth)
     effectiveProxy = {
       ...proxy,
       host: '127.0.0.1',
-      port: localPort,
+      port: port,
       username: '',
       password: ''
     };
   }
+
 
   let geo = null;
   if (proxy) {

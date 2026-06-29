@@ -1,8 +1,8 @@
 {
-  "name": "spotcheck-lab",
+  "name": "yfitops-desktop",
   "version": "1.0.0",
-  "description": "Multi-profile browser testing desktop app for QA: isolated profiles, per-profile proxies, and official Chromium device emulation.",
-  "author": "SpotCheck Lab",
+  "description": "Multi-profile browser testing desktop app with real device fingerprinting and SOCKS5 auth support.",
+  "author": "Yfitops",
   "license": "MIT",
   "main": "src/main/main.js",
   "scripts": {
@@ -21,8 +21,10 @@
     "axios": "^1.7.7",
     "electron-log": "^5.2.0",
     "electron-store": "^8.2.0",
+    "get-port": "^7.1.0",
     "https-proxy-agent": "^7.0.5",
-    "socks-proxy-agent": "^8.0.4"
+    "socks-proxy-agent": "^8.0.4",
+    "socks": "^2.8.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
