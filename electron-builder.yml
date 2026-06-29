@@ -17,8 +17,10 @@ files:
 # electron-builder prunes devDependencies automatically; production deps
 # (axios, electron-store, electron-log, proxy agents) are bundled.
 asarUnpack:
-  - "**/node_modules/socks-proxy-agent/**"
-  - "**/node_modules/https-proxy-agent/**"
+  - "node_modules/electron-store/**/*"
+  - "node_modules/socks-proxy-agent/**/*"
+  - "node_modules/https-proxy-agent/**/*"
+  - "node_modules/get-port/**/*"
 
 win:
   target:
