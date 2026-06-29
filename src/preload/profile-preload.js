@@ -48,6 +48,7 @@ Object.defineProperty(navigator, 'language', { get: () => fp.language, configura
 Object.defineProperty(navigator, 'languages', { get: () => fp.languages, configurable: true });
 Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => fp.hardwareConcurrency, configurable: true });
 Object.defineProperty(navigator, 'deviceMemory', { get: () => fp.deviceMemory, configurable: true });
+Object.defineProperty(navigator, 'platform', { get: () => fp.platform, configurable: true });
 
 // 5. Screen
 Object.defineProperty(window.screen, 'width', { get: () => fp.screenWidth, configurable: true });

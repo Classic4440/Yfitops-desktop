@@ -1,24 +1,10 @@
 'use strict';
 
 // Launches and tracks isolated profile browser windows.
-//
-// Isolation strategy:
-//  - Each profile uses a dedicated persistent session partition
-//    (`persist:profile-<id>`), giving it its own cookies, cache, localStorage,
-//    IndexedDB, etc. Chromium stores these under a per-partition folder inside
-//    userData/Partitions, so profiles never share browsing data.
-//  - A profile can only have one live window at a time (enforced below), which
-//    also prevents two windows writing the same partition concurrently.
-//
-// Emulation strategy (official Chromium APIs only):
-//  - User agent + Accept-Language: session.setUserAgent(ua, acceptLanguages)
-//  - Screen / viewport metrics: webContents.enableDeviceEmulation(...)
-//  - Timezone + locale: CDP Emulation.setTimezoneOverride / setLocaleOverride
-//  - hardwareConcurrency / deviceMemory: defined in the profile preload
-//
-// No anti-detection tampering is performed.
 const path = require('path');
 const fs = require('fs');
+const { fork } = require('child_process');
+const net = require('net');
 const { BrowserWindow, session } = require('electron');
 const { computeEmulation } = require('./emulation');
 const { getProfileLogger } = require('./logger');
@@ -29,6 +15,8 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 
 // profileId -> BrowserWindow
 const runningWindows = new Map();
+// profileId -> ChildProcess (socksForwarder)
+const runningForwarders = new Map();
 
 function partitionName(profileId) {
   return `persist:profile-${profileId}`;
@@ -53,51 +41,42 @@ function listRunning() {
 }
 
 /**
- * Apply per-window proxy settings, including HTTP/HTTPS proxy authentication.
- * SOCKS5 auth is not supported by Chromium's built-in proxy (documented).
- *
- * @param {Electron.Session} ses
- * @param {Electron.BrowserWindow} win
- * @param {object} proxy
- * @param {object} logger
+ * Find a random free port on localhost.
+ */
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/**
+ * Apply per-window proxy settings.
  */
 async function applyProxy(ses, win, proxy, logger) {
   if (!proxy) return;
 
   const scheme = proxy.type === 'socks5' ? 'socks5' : 'http';
-  // proxyRules maps every protocol through the proxy; <local> is bypassed.
   const proxyRules = `${scheme}://${proxy.host}:${proxy.port}`;
   await ses.setProxy({ proxyRules, proxyBypassRules: '<local>' });
   logger.info(`Proxy set: ${proxyRules} (type=${proxy.type})`);
 
-  if (proxy.username) {
-    if (proxy.type === 'socks5') {
-      logger.warn(
-        'SOCKS5 username/password auth is not supported by Chromium proxy. ' +
-          'Credentials will be ignored. Use an HTTP/HTTPS proxy or a local SOCKS forwarder.'
-      );
-    } else {
-      // Respond to the proxy auth challenge for this window only.
-      win.webContents.on('login', (event, _details, authInfo, callback) => {
-        if (authInfo.isProxy) {
-          event.preventDefault();
-          callback(proxy.username, proxy.password || '');
-        }
-      });
-    }
+  if (proxy.username && proxy.type !== 'socks5') {
+    win.webContents.on('login', (event, _details, authInfo, callback) => {
+      if (authInfo.isProxy) {
+        event.preventDefault();
+        callback(proxy.username, proxy.password || '');
+      }
+    });
   }
 }
 
-/**
- * Apply official Chromium device emulation to a window's webContents.
- * @param {Electron.WebContents} wc
- * @param {object} fp - output of generateFingerprint()
- * @param {object} logger
- */
 async function applyEmulation(wc, fp, logger) {
-  // Screen + viewport metrics. screenPosition 'desktop' emulates a desktop
-  // device; viewSize controls window.innerWidth/Height, screenSize controls
-  // window.screen.width/height.
   wc.enableDeviceEmulation({
     screenPosition: 'desktop',
     screenSize: { width: fp.screenWidth, height: fp.screenHeight },
@@ -107,7 +86,6 @@ async function applyEmulation(wc, fp, logger) {
     scale: 1,
   });
 
-  // Timezone + locale via the Chrome DevTools Protocol (official emulation).
   try {
     if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
     await wc.debugger.sendCommand('Emulation.setTimezoneOverride', {
@@ -122,11 +100,6 @@ async function applyEmulation(wc, fp, logger) {
   }
 }
 
-/**
- * Wire console + network logging for a profile window.
- * @param {Electron.WebContents} wc
- * @param {object} logger
- */
 function attachLogging(wc, logger) {
   wc.on('console-message', (_e, level, message, line, sourceId) => {
     logger.info(`[console:${level}] ${message} (${sourceId}:${line})`);
@@ -134,8 +107,6 @@ function attachLogging(wc, logger) {
   wc.on('render-process-gone', (_e, details) => {
     logger.error(`Renderer gone: ${details.reason} (${details.exitCode})`);
   });
-
-  // Lightweight network request logging via the session's webRequest API.
   wc.session.webRequest.onCompleted((details) => {
     logger.debug(`[net] ${details.statusCode} ${details.method} ${details.url}`);
   });
@@ -144,14 +115,6 @@ function attachLogging(wc, logger) {
   });
 }
 
-/**
- * Launch a profile in its own isolated browser window.
- *
- * @param {object} profile
- * @param {object|null} proxy
- * @param {object} ctx - { userDataPath, defaultStartUrl, preloadPath, onStatus }
- * @returns {Promise<{ profileId: string }>}
- */
 async function launchProfileWindow(profile, proxy, ctx) {
   if (isRunning(profile.id)) {
     throw new Error(`Profile "${profile.name}" is already running.`);
@@ -159,7 +122,38 @@ async function launchProfileWindow(profile, proxy, ctx) {
 
   const logger = getProfileLogger(profile.id, ctx.userDataPath);
 
-  // Fetch proxy geo for timezone sync
+  // --- SOCKS5 Forwarder Integration ---
+  let effectiveProxy = proxy;
+  if (proxy && proxy.type === 'socks5' && proxy.username) {
+    const localPort = await getFreePort();
+    logger.info(`Spawning SOCKS5 forwarder for ${proxy.host}:${proxy.port} on local port ${localPort}`);
+    
+    const forwarder = fork(path.join(__dirname, 'socksForwarder.js'), [
+      JSON.stringify(proxy),
+      localPort.toString()
+    ], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('SOCKS5 forwarder timed out')), 10000);
+      forwarder.once('message', (msg) => {
+        if (msg === 'ready') {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      forwarder.once('error', reject);
+    });
+
+    runningForwarders.set(profile.id, forwarder);
+    effectiveProxy = {
+      ...proxy,
+      host: '127.0.0.1',
+      port: localPort,
+      username: '',
+      password: ''
+    };
+  }
+
   let geo = null;
   if (proxy) {
     try {
@@ -179,45 +173,51 @@ async function launchProfileWindow(profile, proxy, ctx) {
 
   const fp = generateFingerprint(profile.seed, geo);
   const ses = session.fromPartition(partitionName(profile.id));
-  // setUserAgent applies the UA and the Accept-Language header / navigator.languages.
-  ses.setUserAgent(fp.userAgent, fp.languages.join(','));
+  ses.setUserAgent(fp.userAgent);
 
   const win = new BrowserWindow({
     width: Math.min(fp.screenWidth, 1600),
     height: Math.min(fp.screenHeight, 1000),
-    title: `SpotCheck — ${profile.name}`,
+    title: `Yfitops — ${profile.name} (${fp.deviceName})`,
     webPreferences: {
       partition: partitionName(profile.id),
       preload: ctx.preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      // Pass fingerprint to preload via additionalArguments
       additionalArguments: [`--profile-id=${profile.id}`, `--fp=${JSON.stringify(fp)}`],
     },
   });
 
   runningWindows.set(profile.id, win);
   attachLogging(win.webContents, logger);
-  logger.info(`Launching profile "${profile.name}" (${profile.id})`);
 
   win.on('closed', () => {
     runningWindows.delete(profile.id);
+    const forwarder = runningForwarders.get(profile.id);
+    if (forwarder) {
+      forwarder.kill();
+      runningForwarders.delete(profile.id);
+      logger.info(`SOCKS5 forwarder for profile ${profile.id} stopped`);
+    }
     logger.info(`Profile "${profile.name}" window closed`);
     if (ctx.onStatus) ctx.onStatus(profile.id, 'stopped');
   });
 
   try {
-    await applyProxy(ses, win, proxy, logger);
+    await applyProxy(ses, win, effectiveProxy, logger);
     await applyEmulation(win.webContents, fp, logger);
 
     const startUrl = profile.startUrl || ctx.defaultStartUrl || 'about:blank';
     await win.loadURL(startUrl);
-    logger.info(`Loaded start URL: ${startUrl}`);
     if (ctx.onStatus) ctx.onStatus(profile.id, 'running');
     return { profileId: profile.id };
   } catch (err) {
-    logger.error(`Launch failed: ${err.message}`);
+    const forwarder = runningForwarders.get(profile.id);
+    if (forwarder) {
+      forwarder.kill();
+      runningForwarders.delete(profile.id);
+    }
     if (ctx.onStatus) ctx.onStatus(profile.id, 'error');
     if (!win.isDestroyed()) win.destroy();
     runningWindows.delete(profile.id);
@@ -225,10 +225,6 @@ async function launchProfileWindow(profile, proxy, ctx) {
   }
 }
 
-/**
- * Stop (close) a running profile window.
- * @param {string} profileId
- */
 function stopProfileWindow(profileId) {
   const win = runningWindows.get(profileId);
   if (win && !win.isDestroyed()) {
@@ -238,14 +234,6 @@ function stopProfileWindow(profileId) {
   return false;
 }
 
-/**
- * Open a fingerprint/emulation test page inside the profile's own window,
- * launching the profile first if needed.
- * @param {object} profile
- * @param {object|null} proxy
- * @param {object} ctx
- * @param {string} testUrl
- */
 async function openTestPage(profile, proxy, ctx, testUrl) {
   if (!isRunning(profile.id)) {
     await launchProfileWindow(profile, proxy, ctx);
@@ -255,12 +243,6 @@ async function openTestPage(profile, proxy, ctx, testUrl) {
   return { profileId: profile.id };
 }
 
-/**
- * Permanently clear a profile's isolated storage (cookies, cache, etc.) and
- * delete its on-disk partition folder. The profile must be stopped first.
- * @param {string} profileId
- * @param {string} userDataPath
- */
 async function clearProfileStorage(profileId, userDataPath) {
   if (isRunning(profileId)) {
     throw new Error('Stop the profile before clearing its storage.');
@@ -268,18 +250,10 @@ async function clearProfileStorage(profileId, userDataPath) {
   const ses = session.fromPartition(partitionName(profileId));
   await ses.clearStorageData();
   await ses.clearCache();
-
-  // Best-effort removal of the on-disk partition folder.
-  const partitionDir = path.join(
-    userDataPath,
-    'Partitions',
-    `profile-${profileId}`
-  );
+  const partitionDir = path.join(userDataPath, 'Partitions', `profile-${profileId}`);
   try {
     fs.rmSync(partitionDir, { recursive: true, force: true });
-  } catch {
-    // Folder may not exist yet; storage was already cleared above.
-  }
+  } catch {}
   return true;
 }
 

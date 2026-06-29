@@ -11,74 +11,107 @@ function pick(arr, seed, key) {
   return arr[idx];
 }
 
-function generateFingerprint(seed, proxyGeo = null) {
-  const uas = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  ];
+/**
+ * Real Device Hardware Profiles
+ * Coordinated sets of hardware specs to avoid "impossible" combinations.
+ */
+const DEVICE_PROFILES = [
+  {
+    name: 'MacBook Pro 16 (M2 Max)',
+    ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    hwConcurrency: 12,
+    deviceMemory: 16,
+    res: '3456x2234',
+    vendor: 'Apple Inc.',
+    renderer: 'Apple M2 Max',
+    platform: 'MacIntel'
+  },
+  {
+    name: 'Dell XPS 15 (Windows 11)',
+    ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    hwConcurrency: 16,
+    deviceMemory: 8,
+    res: '1920x1200',
+    vendor: 'Google Inc. (Intel)',
+    renderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0)',
+    platform: 'Win32'
+  },
+  {
+    name: 'Surface Laptop 5',
+    ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    hwConcurrency: 8,
+    deviceMemory: 4,
+    res: '2256x1504',
+    vendor: 'Google Inc. (Intel)',
+    renderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0)',
+    platform: 'Win32'
+  },
+  {
+    name: 'High-End Gaming PC (NVIDIA)',
+    ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    hwConcurrency: 24,
+    deviceMemory: 16,
+    res: '2560x1440',
+    vendor: 'Google Inc. (NVIDIA)',
+    renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0)',
+    platform: 'Win32'
+  }
+];
 
-  const screenRes = ['1920x1080', '1366x768', '1536x864', '1440x900', '1280x720'];
+function generateFingerprint(seed, proxyGeo = null, forcedProfile = null) {
+  const profile = forcedProfile || pick(DEVICE_PROFILES, seed, 'device');
+  
+  const [width, height] = profile.res.split('x').map(Number);
   const languages = [['en-US','en'], ['en-GB','en'], ['fr-FR','fr'], ['de-DE','de']];
   const timezones = ['America/New_York','Europe/London','Europe/Paris','Australia/Sydney'];
-  const hwConcurrency = [2,4,6,8,12,16];
-  const deviceMemory = [2,4,8,16];
 
-  const userAgent = pick(uas, seed, 'ua');
-  const res = pick(screenRes, seed, 'res');
-  const [width, height] = res.split('x').map(Number);
   const langPair = pick(languages, seed, 'lang');
   const primaryLang = langPair[0];
   const langList = [primaryLang, ...(seededHash(seed, 'langExtra') > 0.5 ? ['en'] : [])];
+  
   let timezone = pick(timezones, seed, 'tz');
   if (proxyGeo && proxyGeo.timezone) timezone = proxyGeo.timezone;
 
-  // Plugins
+  // Plugins (Standard modern Chrome set)
   const plugins = [
-    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+    { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
     { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
-  ];
-  const shuffledPlugins = plugins.slice().sort((a,b) => {
-    return seededHash(seed, 'plugin_'+a.name) - seededHash(seed, 'plugin_'+b.name);
-  });
+    { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer', description: '' },
+    { name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer', description: '' },
+    { name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer', description: '' }
+  ].slice(0, 3);
 
-  // Canvas noise (10 points)
+  // Canvas noise
   const canvasNoise = [];
   for (let i=0; i<10; i++) {
     canvasNoise.push({
       x: Math.floor(seededHash(seed, `cnx${i}`) * 200),
       y: Math.floor(seededHash(seed, `cny${i}`) * 200),
-      r: Math.floor(seededHash(seed, `cnr${i}`) * 6) - 3,
-      g: Math.floor(seededHash(seed, `cng${i}`) * 6) - 3,
-      b: Math.floor(seededHash(seed, `cnb${i}`) * 6) - 3
+      r: Math.floor(seededHash(seed, `cnr${i}`) * 4) - 2,
+      g: Math.floor(seededHash(seed, `cng${i}`) * 4) - 2,
+      b: Math.floor(seededHash(seed, `cnb${i}`) * 4) - 2
     });
   }
 
-  // WebGL
-  const vendors = ['Google Inc. (Intel)', 'Google Inc. (NVIDIA)'];
-  const renderers = [
-    'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)',
-    'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 Direct3D11 vs_5_0 ps_5_0)'
-  ];
-
   return {
-    userAgent,
+    deviceName: profile.name,
+    userAgent: profile.ua,
     screenWidth: width,
     screenHeight: height,
     language: primaryLang,
     languages: langList,
     timezone,
-    hardwareConcurrency: pick(hwConcurrency, seed, 'hw'),
-    deviceMemory: pick(deviceMemory, seed, 'mem'),
-    plugins: shuffledPlugins,
+    hardwareConcurrency: profile.hwConcurrency,
+    deviceMemory: profile.deviceMemory,
+    platform: profile.platform,
+    plugins: plugins,
     canvasNoise,
     webgl: {
-      vendor: pick(vendors, seed, 'webglvendor'),
-      renderer: pick(renderers, seed, 'webglrenderer')
+      vendor: profile.vendor,
+      renderer: profile.renderer
     },
-    seed // including seed for audio hash in preload
+    seed
   };
 }
 
-module.exports = { generateFingerprint };
+module.exports = { generateFingerprint, DEVICE_PROFILES };
